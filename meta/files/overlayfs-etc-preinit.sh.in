@@ -1,29 +1,38 @@
 #!/bin/sh
 
-echo "PREINIT: Start"
-
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
-mount -o remount,rw /
+overlay_mount() {
+    overlayfs_mount_point=$1
+    overlayfs_suffix=$2
+    overlayfs_fstype=$3
+    overlayfs_device=$4
+    overlayfs_mount_options=$5
+    overlayfs_params=$6
+    fail_message=$7
 
-mkdir -p /proc
-mkdir -p /sys
-mkdir -p /run
-mkdir -p /var/run
+    overlayfs_upper_dir=$overlayfs_mount_point/$overlayfs_suffix/upper
+    overlayfs_work_dir=$overlayfs_mount_point/$overlayfs_suffix/work
 
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
+    mount -o remount,rw /
 
-[ -z "$CONSOLE" ] && CONSOLE="/dev/console"
+    mkdir -p /proc
+    mkdir -p /sys
+    mkdir -p /run
+    mkdir -p /var/run
 
-mkdir -p {OVERLAYFS_ETC_MOUNT_POINT}
-if mount -n -t {OVERLAYFS_ETC_FSTYPE} -o {OVERLAYFS_ETC_MOUNT_OPTIONS} {OVERLAYFS_ETC_DEVICE} {OVERLAYFS_ETC_MOUNT_POINT}
-then
-    mkdir -p {OVERLAYFS_ETC_MOUNT_POINT}/overlay-etc/upper
-    mkdir -p {OVERLAYFS_ETC_MOUNT_POINT}/overlay-etc/work
-    mount -n -t overlay -o upperdir={OVERLAYFS_ETC_MOUNT_POINT}/overlay-etc/upper,lowerdir=/etc,workdir={OVERLAYFS_ETC_MOUNT_POINT}/overlay-etc/work {OVERLAYFS_ETC_MOUNT_POINT}/overlay-etc/upper /etc || echo "PREINIT: Mounting etc-overlay failed!"
-else
-    echo "PREINIT: Mounting </data> failed!"
-fi
+    mount -t proc proc /proc
+    mount -t sysfs sysfs /sys
 
-echo "PREINIT: done; starting </sbin/init>"
-exec {SBIN_INIT_NAME}
+    [ -z "$CONSOLE" ] && CONSOLE="/dev/console"
+
+    mkdir -p $overlayfs_mount_point
+
+    if mount -n -t $overlayfs_fstype -o $overlayfs_mount_options $overlayfs_device $overlayfs_mount_point
+    then
+        mkdir -p $overlayfs_upper_dir
+        mkdir -p $overlayfs_work_dir
+        mount -n -t overlay -o upperdir=$overlayfs_upper_dir,lowerdir=/etc,workdir=$overlayfs_work_dir $overlayfs_mount_point/overlay-etc/upper /etc || echo "PREINIT: Mounting etc-overlay failed!"
+    else
+        fail_message
+    fi
+}
